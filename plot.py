@@ -9,8 +9,8 @@ import pandas as pd
 from scipy.interpolate import interp1d
 import matplotlib as mpl
 import matplotlib.style
-# mpl.use('TkAgg')
-mpl.use("macOSX")
+mpl.use('Agg')
+# mpl.use("macOSX")
 mpl.style.use('seaborn')
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -87,9 +87,13 @@ def gather_results_for_prefix(args, results_path, prefix, point_interval):
 
 	nfiles = 0
 	for i, f in enumerate(xpids):
+		if not os.path.exists(os.path.join(results_path, f, args.log_filename)):
+			continue
 		f_in = open(os.path.join(results_path, f, args.log_filename), 'rt')
 		reader = csv.reader((line.replace('\0', ' ') for line in f_in))
 		headers = next(reader, None)
+		if headers is None:
+			continue
 		if len(headers) < 2:
 			raise ValueError('result is malformed')
 		headers[0] = headers[0].replace('#', '').strip() # remove comment hash and space
@@ -271,7 +275,7 @@ if __name__ == '__main__':
 		--threshold_label: label for threshold
 	"""
 	parser = argparse.ArgumentParser()
-	parser.add_argument('-b', '--base_path', type=str, default='~/logs/ppo', help='base path to results directory per prefix')
+	parser.add_argument('-b', '--base_path', type=str, default='/checkpoint/amyzhang/level-replay', help='base path to results directory per prefix')
 	parser.add_argument('-r', '--results_path', type=str, nargs='+', default=[''], help='path to results directory')
 	parser.add_argument('--prefix', type=str, nargs='+', default=[''], help='Plot each xpid group matching this prefix per game')
 	parser.add_argument('--log_filename', type=str, default='logs.csv', help='Name of log output file in each result directory')
@@ -481,54 +485,55 @@ if __name__ == '__main__':
 	else:
 		format_plot(args, max_x, all_x, fig, plt)
 
-	ALL_ENVS = PROCGEN_ENVS if not args.env_name else [args.env_name]
-	if len(args.results_path) > 1:
-		if not args.avg_procgen:
-			sigtest_results_dict = {k:{env:None for env in ALL_ENVS} for k in args.results_path[1:]}
-		else:
-			sigtest_results_dict = {k:{results_metas[i+1][-1]:None} for i, k in enumerate(args.results_path[1:])}
+	# ALL_ENVS = PROCGEN_ENVS if not args.env_name else [args.env_name]
+	# if len(args.results_path) > 1:
+	# 	if not args.avg_procgen:
+	# 		sigtest_results_dict = {k:{env:None for env in ALL_ENVS} for k in args.results_path[1:]}
+	# 	else:
+	# 		sigtest_results_dict = {k:{results_metas[i+1][-1]:None} for i, k in enumerate(args.results_path[1:])}
 
-		baseline_key = args.results_path[0]
-		num_rows = infos_dict[baseline_key][-1]['df'].shape[0]
-		row_interval = 1
-		for key in infos_dict.keys():
-			if key == baseline_key: continue
+	# 	baseline_key = args.results_path[0]
+	# 	num_rows = infos_dict[baseline_key][-1]['df'].shape[0]
+	# 	row_interval = 1
+	# 	for key in infos_dict.keys():
+	# 		if key == baseline_key: continue
 
-			for i, info in enumerate(infos_dict[key]):
-				baseline_df = infos_dict[baseline_key][i]['df']
-				baseline_outcomes = baseline_df.iloc[::-1].iloc[::row_interval].values.tolist()
+	# 		for i, info in enumerate(infos_dict[key]):
+	# 			baseline_df = infos_dict[baseline_key][i]['df']
+	# 			baseline_outcomes = baseline_df.iloc[::-1].iloc[::row_interval].values.tolist()
 
-				treatment_df = info['df']
+	# 			treatment_df = info['df']
 
-				if key == 'ucb_drac_plr':
-					treatment_outcomes = treatment_df.iloc[::-1].iloc[::10].values.tolist()
-					baseline_outcomes = baseline_outcomes[:len(treatment_outcomes)]
-				else:
-					treatment_outcomes = treatment_df.iloc[::-1].iloc[::row_interval].values.tolist()
+	# 			if key == 'ucb_drac_plr':
+	# 				treatment_outcomes = treatment_df.iloc[::-1].iloc[::10].values.tolist()
+	# 				baseline_outcomes = baseline_outcomes[:len(treatment_outcomes)]
+	# 			else:
+	# 				treatment_outcomes = treatment_df.iloc[::-1].iloc[::row_interval].values.tolist()
 
-				# Welch t-test
-				sigtest_results = scipy.stats.ttest_ind(baseline_outcomes, treatment_outcomes, equal_var=False, axis=1)
-				sigtest_results_dict[key][info['tag']] = sigtest_results
+	# 			# Welch t-test
+	# 			import ipdb; ipdb.set_trace()
+	# 			sigtest_results = scipy.stats.ttest_ind(baseline_outcomes, treatment_outcomes, equal_var=False, axis=1)
+	# 			sigtest_results_dict[key][info['tag']] = sigtest_results
 
-		fields = ['env', 'p-value', 'k-fwer significant', 'reject ratio']
-		for key, results in sigtest_results_dict.items():
-			print(f'\nCondition: {key}')
-			print('-'*84)
-			print(f'{fields[0]:12}{fields[1]:24}{fields[2]:24}{fields[3]:24}')
-			print('-'*84)
-			for i, (env, r) in enumerate(results.items()):
-				sigmarker = '' if r.pvalue[0] >= args.pvalue else '*'
+	# 	fields = ['env', 'p-value', 'k-fwer significant', 'reject ratio']
+	# 	for key, results in sigtest_results_dict.items():
+	# 		print(f'\nCondition: {key}')
+	# 		print('-'*84)
+	# 		print(f'{fields[0]:12}{fields[1]:24}{fields[2]:24}{fields[3]:24}')
+	# 		print('-'*84)
+	# 		for i, (env, r) in enumerate(results.items()):
+	# 			sigmarker = '' if r.pvalue[0] >= args.pvalue else '*'
 
-				# k-FWER Welch t-test
-				num_reject = len([p for p in r.pvalue if p < args.pvalue*args.kfwer_ratio])
-				reject_ratio = num_reject/num_rows
-				curve_sig = '*' if reject_ratio > args.kfwer_ratio else ' '
+	# 			# k-FWER Welch t-test
+	# 			num_reject = len([p for p in r.pvalue if p < args.pvalue*args.kfwer_ratio])
+	# 			reject_ratio = num_reject/num_rows
+	# 			curve_sig = '*' if reject_ratio > args.kfwer_ratio else ' '
 
-				final_pvalue_str = str(r.pvalue[0]) + sigmarker
+	# 			final_pvalue_str = str(r.pvalue[0]) + sigmarker
 
-				if reject_ratio > 1:
-					raise ValueError('Reject ratio > 1.0')
-				print(f'{env:12}{final_pvalue_str:24}{curve_sig:24}{reject_ratio:24}')
+	# 			if reject_ratio > 1:
+	# 				raise ValueError('Reject ratio > 1.0')
+	# 			print(f'{env:12}{final_pvalue_str:24}{curve_sig:24}{reject_ratio:24}')
 
 	# Render plot
 	if args.savename:

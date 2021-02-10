@@ -36,7 +36,7 @@ def model_for_env_name(args, env):
     if args.env_name in PROCGEN_ENVS:
         model = Policy(
             env.observation_space.shape, env.action_space.n,
-            arch=args.arch,
+            arch=args.arch, ensemble_size=args.ensemble_size,
             base_kwargs={'recurrent': False, 'hidden_size': args.hidden_size})
 
     elif args.env_name.startswith('MiniGrid'):
@@ -110,13 +110,14 @@ class Conv2d_tf(nn.Conv2d):
         )
 
 
+#TODO: implement ensemble policy
 class Policy(DeviceAwareModule):
     """
     Actor-Critic module 
     """
-    def __init__(self, obs_shape, num_actions, arch='small', base_kwargs=None):
+    def __init__(self, obs_shape, num_actions, arch='small', ensemble_size=1, base_kwargs=None):
         super(Policy, self).__init__()
-        
+        self.ensemble_size = ensemble_size
         if base_kwargs is None:
             base_kwargs = {}
         
@@ -128,23 +129,26 @@ class Policy(DeviceAwareModule):
         elif len(obs_shape) == 1:
             base = MLPBase
 
-        self.base = base(obs_shape[0], input_h=obs_shape[1], input_w=obs_shape[2], **base_kwargs)
-        self.dist = Categorical(self.base.output_size, num_actions)
+        self.base = []
+        for _ in range(ensemble_size):
+            self.base.append(base(obs_shape[0], input_h=obs_shape[1], input_w=obs_shape[2], **base_kwargs))
+        self.base = nn.ModuleList(self.base)
+        self.dist = Categorical(self.base[0].output_size, num_actions)
 
     @property
     def is_recurrent(self):
-        return self.base.is_recurrent
+        return self.base[0].is_recurrent
 
     @property
     def recurrent_hidden_state_size(self):
         """Size of rnn_hx."""
-        return self.base.recurrent_hidden_state_size
+        return self.base[0].recurrent_hidden_state_size
 
     def forward(self, inputs, rnn_hxs, masks):
         raise NotImplementedError
 
-    def act(self, inputs, rnn_hxs, masks, deterministic=False):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+    def act(self, inputs, rnn_hxs, masks, deterministic=False, agent_id=0):
+        value, actor_features, rnn_hxs = self.base[agent_id](inputs, rnn_hxs, masks)
         dist = self.dist(actor_features)
 
         if deterministic:
@@ -158,12 +162,22 @@ class Policy(DeviceAwareModule):
 
         return value, action, action_log_dist, rnn_hxs
 
-    def get_value(self, inputs, rnn_hxs, masks):
-        value, _, _ = self.base(inputs, rnn_hxs, masks)
+    def get_uncertainty(self, inputs, rnn_hxs, masks):
+        """Compute standard deviation over ensemble."""
+        values = []
+        for i in range(self.ensemble_size):
+            values.append(self.get_value(inputs, rnn_hxs, masks, agent_id=i))
+        values = torch.stack(values)
+        norm_factor = torch.mean(values, dim=0)
+        norm_values = torch.div(values, norm_factor + 1e-3)
+        return torch.std(norm_values, dim=0)
+
+    def get_value(self, inputs, rnn_hxs, masks, agent_id=0):
+        value, _, _ = self.base[agent_id](inputs, rnn_hxs, masks)
         return value
 
-    def evaluate_actions(self, inputs, rnn_hxs, masks, action):
-        value, actor_features, rnn_hxs = self.base(inputs, rnn_hxs, masks)
+    def evaluate_actions(self, inputs, rnn_hxs, masks, action, agent_id=0):
+        value, actor_features, rnn_hxs = self.base[agent_id](inputs, rnn_hxs, masks)
         dist = self.dist(actor_features)
 
         action_log_probs = dist.log_probs(action)

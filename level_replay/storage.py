@@ -18,6 +18,7 @@ class RolloutStorage(object):
         self.returns = torch.zeros(num_steps + 1, num_processes, 1)
         self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
         self.action_log_dist = torch.zeros(num_steps, num_processes, action_space.n)
+        self.uncertainties = torch.zeros(num_steps, num_processes, 1)
         if action_space.__class__.__name__ == 'Discrete':
             action_shape = 1
         else:
@@ -50,9 +51,10 @@ class RolloutStorage(object):
         self.masks = self.masks.to(device)
         self.bad_masks = self.bad_masks.to(device)
         self.level_seeds = self.level_seeds.to(device)
+        self.uncertainties = self.uncertainties.to(device)
 
     def insert(self, obs, recurrent_hidden_states, actions, action_log_probs, action_log_dist,
-               value_preds, rewards, masks, bad_masks, level_seeds=None):
+               value_preds, rewards, masks, bad_masks, uncertainties, level_seeds=None):
         if len(rewards.shape) == 3: rewards = rewards.squeeze(2)
         self.obs[self.step + 1].copy_(obs)
         self.recurrent_hidden_states[self.step +
@@ -64,6 +66,7 @@ class RolloutStorage(object):
         self.rewards[self.step].copy_(rewards)
         self.masks[self.step + 1].copy_(masks)
         self.bad_masks[self.step + 1].copy_(bad_masks)
+        self.uncertainties[self.step].copy_(uncertainties)
 
         if level_seeds is not None:
             self.level_seeds[self.step].copy_(level_seeds)
@@ -143,13 +146,15 @@ class RolloutStorage(object):
             masks_batch = self.masks[:-1].view(-1, 1)[indices]
             old_action_log_probs_batch = self.action_log_probs.view(-1,
                                                                     1)[indices]
+            uncertainties_batch = self.uncertainties.view(-1, 1)[indices]
             if advantages is None:
                 adv_targ = None
             else:
                 adv_targ = advantages.view(-1, 1)[indices]
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
+                value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, \
+                uncertainties_batch, adv_targ
 
     def recurrent_generator(self, advantages, num_mini_batch):
         num_processes = self.rewards.size(1)
@@ -167,6 +172,7 @@ class RolloutStorage(object):
             return_batch = []
             masks_batch = []
             old_action_log_probs_batch = []
+            uncertainties_batch = []
             adv_targ = []
 
             for offset in range(num_envs_per_batch):
@@ -180,6 +186,7 @@ class RolloutStorage(object):
                 masks_batch.append(self.masks[:-1, ind])
                 old_action_log_probs_batch.append(
                     self.action_log_probs[:, ind])
+                uncertainties_batch.append(self.uncertainties[:, ind])
                 adv_targ.append(advantages[:, ind])
 
             T, N = self.num_steps, num_envs_per_batch
@@ -191,6 +198,7 @@ class RolloutStorage(object):
             masks_batch = torch.stack(masks_batch, 1)
             old_action_log_probs_batch = torch.stack(
                 old_action_log_probs_batch, 1)
+            uncertainties_batch = torch.stack(uncertainties_batch, 1)
             adv_targ = torch.stack(adv_targ, 1)
 
             # States is just a (N, -1) tensor
@@ -205,7 +213,9 @@ class RolloutStorage(object):
             masks_batch = _flatten_helper(T, N, masks_batch)
             old_action_log_probs_batch = _flatten_helper(T, N, \
                     old_action_log_probs_batch)
+            uncertainties_batch = _flatten_helper(T, N, uncertainties_batch)
             adv_targ = _flatten_helper(T, N, adv_targ)
 
             yield obs_batch, recurrent_hidden_states_batch, actions_batch, \
-                value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, adv_targ
+                value_preds_batch, return_batch, masks_batch, old_action_log_probs_batch, \
+                uncertainties_batch, adv_targ

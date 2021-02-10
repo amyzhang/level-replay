@@ -136,6 +136,8 @@ class LevelSampler():
             score_function = self._one_step_td_error
         elif self.strategy == 'tscl_window':
             score_function = self._tscl_window
+        elif self.strategy == 'uncertainty':
+            score_function = self._get_uncertainty
         else:
             raise ValueError(f'Unsupported strategy, {self.strategy}')
 
@@ -283,6 +285,13 @@ class LevelSampler():
 
         return mean_score, max_score
 
+    def _get_uncertainty(self, **kwargs):
+        uncertainties = kwargs['uncertainties']
+        mean_score = uncertainties.mean().item()
+        max_score = uncertainties.max().item()
+        return mean_score, max_score
+    
+    
     def _tscl_window(self, **kwargs):
         rewards = kwargs['rewards']
         seed = kwargs['seed']
@@ -306,7 +315,7 @@ class LevelSampler():
 
     @property
     def requires_value_buffers(self):
-        return self.strategy in ['gae', 'value_l1', 'one_step_td_error', 'tscl_window']
+        return self.strategy in ['gae', 'value_l1', 'one_step_td_error', 'tscl_window', 'uncertainty']
 
     @property
     def _has_working_seed_buffer(self):
@@ -343,7 +352,7 @@ class LevelSampler():
                     score_function_kwargs['returns'] = rollouts.returns[start_t:t,actor_index]
                     score_function_kwargs['rewards'] = rollouts.rewards[start_t:t,actor_index]
                     score_function_kwargs['value_preds'] = rollouts.value_preds[start_t:t,actor_index]
-
+                    score_function_kwargs['uncertainties'] = rollouts.uncertainties[start_t:t,actor_index]
                 score, max_score = score_function(**score_function_kwargs)
                 num_steps = len(episode_logits)
                 self.update_seed_score(actor_index, seed_t, score, max_score, num_steps)
@@ -362,7 +371,7 @@ class LevelSampler():
                     score_function_kwargs['returns'] = rollouts.returns[start_t:,actor_index]
                     score_function_kwargs['rewards'] = rollouts.rewards[start_t:,actor_index]
                     score_function_kwargs['value_preds'] = rollouts.value_preds[start_t:,actor_index]
-
+                    score_function_kwargs['uncertainties'] = rollouts.uncertainties[start_t:,actor_index]
                 score, max_score = score_function(**score_function_kwargs)
                 num_steps = len(episode_logits)
 

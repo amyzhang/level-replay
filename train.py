@@ -217,6 +217,7 @@ def train(args, seeds):
 
     timer = timeit.default_timer
     update_start_time = timer()
+    agent_id = 0 # np.random.choice(range(actor_critic.ensemble_size))
     for j in range(initial_update_count, num_updates):
         actor_critic.train()
         for step in range(args.num_steps):
@@ -226,8 +227,9 @@ def train(args, seeds):
                 if aug_id:
                     obs_id = aug_id(obs_id)
                 value, action, action_log_dist, recurrent_hidden_states = actor_critic.act(
-                    obs_id, rollouts.recurrent_hidden_states[step], rollouts.masks[step])
+                    obs_id, rollouts.recurrent_hidden_states[step], rollouts.masks[step], agent_id=agent_id)
                 action_log_prob = action_log_dist.gather(-1, action)
+                uncertainties = actor_critic.get_uncertainty(obs_id, rollouts.recurrent_hidden_states[step], rollouts.masks[step])
 
             # Observed reward and next obs
             obs, reward, done, infos = envs.step(action)
@@ -246,11 +248,10 @@ def train(args, seeds):
             bad_masks = torch.FloatTensor(
                 [[0.0] if 'bad_transition' in info.keys() else [1.0]
                  for info in infos])
-
             rollouts.insert(
                 obs, recurrent_hidden_states, 
                 action, action_log_prob, action_log_dist, 
-                value, reward, masks, bad_masks, level_seeds)
+                value, reward, masks, bad_masks, uncertainties, level_seeds)
 
         with torch.no_grad():
             obs_id = rollouts.obs[-1]

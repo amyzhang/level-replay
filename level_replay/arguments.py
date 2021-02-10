@@ -52,6 +52,11 @@ parser.add_argument(
     default=0.5,
     help='max norm of gradients)')
 parser.add_argument(
+    '--ensemble_size',
+    type=int,
+    default=5,
+    help='ensemble size')
+parser.add_argument(
     '--no_ret_normalization',
     type=str2bool, nargs='?', const=True, default=False,
     help='Whether to use unnormalized returns')
@@ -101,7 +106,7 @@ parser.add_argument(
     help='name for the run - prefix to log files')
 parser.add_argument(
     '--log_dir',
-    default='~/logs/ppo/',
+    default='/checkpoint/amyzhang/level-replay/',
     help='directory to save agent logs')
 parser.add_argument(
     '--no_cuda',
@@ -187,7 +192,7 @@ parser.add_argument(
     default='random',
     choices=['off', 'random', 'sequential',
             'policy_entropy', 'least_confidence', 'min_margin', 'gae', 'value_l1', 'one_step_td_error',
-            'tscl_window'],
+            'tscl_window', 'uncertainty'],
     help="Level replay scoring strategy")
 parser.add_argument(
     "--level_replay_max_score_coef", 
