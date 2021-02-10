@@ -106,7 +106,8 @@ parser.add_argument(
     help='name for the run - prefix to log files')
 parser.add_argument(
     '--log_dir',
-    default='/checkpoint/amyzhang/level-replay/',
+    # default='/checkpoint/amyzhang/level-replay/',
+    default='~/logs/ppo',
     help='directory to save agent logs')
 parser.add_argument(
     '--no_cuda',
@@ -240,6 +241,55 @@ parser.add_argument(
     type=float, 
     default=1.0,
     help="Staleness normalization temperature.")
+
+# Secondary strategy arguments.
+parser.add_argument(
+    "--level_replay_secondary_strategy", 
+    type=str,
+    default=None,
+    choices=['off', 'random', 'sequential',
+            'policy_entropy', 'least_confidence', 'min_margin', 'gae', 'value_l1', 'one_step_td_error',
+            'tscl_window', 'uncertainty'],
+    help="Level replay secondary scoring strategy")
+parser.add_argument(
+    "--level_replay_strategy_mix_coef", 
+    type=float,
+    default=0.5,
+    help="Weight to assign primary strategy when mixing with a secondary strategy")
+parser.add_argument(
+    "--level_replay_secondary_score_transform",
+    type=str, 
+    default='softmax', 
+    choices=['constant', 'max', 'eps_greedy', 'rank', 'power', 'softmax'], 
+    help="Level replay scoring strategy")
+parser.add_argument(
+    "--level_replay_secondary_temperature", 
+    type=float,
+    default=1.0,
+    help="Level replay scoring strategy")
+parser.add_argument(
+    "--level_replay_secondary_eps", 
+    type=float,
+    default=0.05,
+    help="Level replay epsilon for eps-greedy sampling")
+parser.add_argument(
+    "--secondary_staleness_coef",
+    type=float, 
+    default=0.0,
+    help="Staleness weighing")
+parser.add_argument(
+    "--secondary_staleness_transform",
+    type=str, 
+    default='power',
+    choices=['max', 'eps_greedy', 'rank', 'power', 'softmax'], 
+    help="Staleness normalization transform")
+parser.add_argument(
+    "--secondary_staleness_temperature",
+    type=float, 
+    default=1.0,
+    help="Staleness normalization temperature")
+
+
 parser.add_argument(
     "--train_full_distribution",
     type=str2bool, nargs='?', const=True, default=False,

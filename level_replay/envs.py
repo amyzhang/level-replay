@@ -3,6 +3,7 @@ from functools import partial
 
 import gym
 import torch
+import numpy as np
 from gym.spaces.box import Box
 from gym_minigrid.wrappers import *
 from gym.wrappers import *
@@ -91,7 +92,7 @@ class TransposeImageProcgen(TransposeObs):
 
 
 class VecPyTorchProcgen(VecEnvWrapper):
-    def __init__(self, venv, device, level_sampler=None):
+    def __init__(self, venv, device, level_sampler=None, secondary_level_sampler=None, strategy_mix_coef=0.5):
         """
         Environment wrapper that returns tensors (for obs and reward)
         """
@@ -99,6 +100,9 @@ class VecPyTorchProcgen(VecEnvWrapper):
         self.device = device
 
         self.level_sampler = level_sampler
+        
+        self.secondary_level_sampler = secondary_level_sampler
+        self.strategy_mix_coef = strategy_mix_coef
 
         self.observation_space = Box(
             self.observation_space.low[0, 0, 0],
@@ -144,7 +148,10 @@ class VecPyTorchProcgen(VecEnvWrapper):
         # reset environment here
         if self.level_sampler:
             for e in done.nonzero()[0]:
-                seed = self.level_sampler.sample()
+                if self.secondary_level_sampler is None or np.random.rand() < self.strategy_mix_coef:
+                    seed = self.level_sampler.sample()
+                else:
+                    seed = self.secondary_level_sampler.sample()
                 self.venv.seed(seed, e) # seed resets the corresponding level
 
             # NB: This reset call propagates upwards through all VecEnvWrappers
@@ -282,6 +289,12 @@ def make_lr_venv(num_envs, env_name, seeds, device, **kwargs):
     level_sampler = kwargs.get('level_sampler')
     level_sampler_args = kwargs.get('level_sampler_args')
 
+    secondary_level_sampler = None
+
+    # NOTE: Currently only supported for Procgen envs
+    level_sampler_secondary_args = kwargs.get('level_sampler_secondary_args')
+    strategy_mix_coef = kwargs.get('level_replay_strategy_mix_coef')
+
     ret_normalization = not kwargs.get('no_ret_normalization', False)
 
     def create_level_sampler(venv, level_sampler, level_sampler_args, seeds):
@@ -313,7 +326,16 @@ def make_lr_venv(num_envs, env_name, seeds, device, **kwargs):
         venv = VecNormalize(venv=venv, ob=False, ret=ret_normalization)
 
         level_sampler = create_level_sampler(venv, level_sampler, level_sampler_args, seeds)
-        envs = VecPyTorchProcgen(venv, device, level_sampler=level_sampler)
+
+        if level_sampler_secondary_args:
+            secondary_level_sampler = create_level_sampler(venv, None, level_sampler_secondary_args, seeds)
+
+        envs = VecPyTorchProcgen(
+            venv, 
+            device, 
+            level_sampler=level_sampler, 
+            secondary_level_sampler=secondary_level_sampler,
+            strategy_mix_coef=strategy_mix_coef)
 
     elif env_name.startswith('MiniGrid'):
         venv = VecMinigrid(num_envs=num_envs, env_name=env_name, seeds=seeds)
@@ -325,4 +347,4 @@ def make_lr_venv(num_envs, env_name, seeds, device, **kwargs):
     else:
         raise ValueError(f'Unsupported env {env_name}')
 
-    return envs, level_sampler
+    return envs, level_sampler, secondary_level_sampler

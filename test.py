@@ -41,7 +41,7 @@ def evaluate(
         start_level = level_sampler.seed_range()[0]
         num_levels = 1
 
-    eval_envs, level_sampler = make_lr_venv(
+    eval_envs, level_sampler, _ = make_lr_venv(
         num_envs=num_processes, env_name=args.env_name,
         seeds=seeds, device=device,
         num_levels=num_levels, start_level=start_level,

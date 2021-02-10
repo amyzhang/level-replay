@@ -291,7 +291,6 @@ class LevelSampler():
         max_score = uncertainties.max().item()
         return mean_score, max_score
     
-    
     def _tscl_window(self, **kwargs):
         rewards = kwargs['rewards']
         seed = kwargs['seed']

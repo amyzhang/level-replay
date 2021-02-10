@@ -83,17 +83,33 @@ def train(args, seeds):
         sample_full_distribution=args.train_full_distribution,
         seed_buffer_size=args.level_replay_seed_buffer_size,
         seed_buffer_priority=args.level_replay_seed_buffer_priority,
-        tscl_window_size=args.tscl_window_size
-    )
-    envs, level_sampler = make_lr_venv(
-        num_envs=args.num_processes, env_name=args.env_name,
-        seeds=seeds, device=device,
-        num_levels=num_levels, 
-        start_level=start_level,
-        no_ret_normalization=args.no_ret_normalization,
-        distribution_mode=args.distribution_mode,
-        paint_vel_info=args.paint_vel_info,
-        level_sampler_args=level_sampler_args)
+        tscl_window_size=args.tscl_window_size)
+
+    level_sampler_secondary_args = {}
+    if args.level_replay_secondary_strategy:
+        level_sampler_secondary_args = dict(
+            strategy=args.level_replay_secondary_strategy,
+            score_transform=args.level_replay_secondary_score_transform,
+            temperature=args.level_replay_secondary_temperature,
+            eps=args.level_replay_secondary_eps,
+            staleness_coef=args.secondary_staleness_coef,
+            staleness_transform=args.secondary_staleness_transform,
+            staleness_temperature=args.secondary_staleness_temperature,)
+        args_tmp = level_sampler_args.copy()
+        args_tmp.update(level_sampler_secondary_args)
+        level_sampler_secondary_args = args_tmp
+
+    envs, level_sampler, secondary_level_sampler = make_lr_venv(
+            num_envs=args.num_processes, env_name=args.env_name,
+            seeds=seeds, device=device,
+            num_levels=num_levels, 
+            start_level=start_level,
+            no_ret_normalization=args.no_ret_normalization,
+            distribution_mode=args.distribution_mode,
+            paint_vel_info=args.paint_vel_info,
+            level_sampler_args=level_sampler_args,
+            level_sampler_secondary_args=level_sampler_secondary_args,
+            level_replay_strategy_mix_coef=args.level_replay_strategy_mix_coef)
     
     is_minigrid = args.env_name.startswith('MiniGrid')
 
@@ -267,12 +283,18 @@ def train(args, seeds):
         if level_sampler:
             level_sampler.update_with_rollouts(rollouts)
 
+        if secondary_level_sampler:
+            secondary_level_sampler.update_with_rollouts(rollouts)
+
         if args.use_ucb and j > 0:
             agent.update_ucb_values(rollouts)
         value_loss, action_loss, dist_entropy, info = agent.update(rollouts)
         rollouts.after_update()
         if level_sampler:
             level_sampler.after_update()
+
+        if secondary_level_sampler:
+            secondary_level_sampler.after_update()
 
         current_update_count = j + 1
 
