@@ -83,7 +83,7 @@ python -m train \
 --train_full_distribution=False \
 --level_replay_seed_buffer_size=0 \
 --level_replay_seed_buffer_priority=score \
---arch=small \
+--arch=large \
 --lr=0.0005 \
 --num_env_steps=25000000 \
 --num_steps=256 \
