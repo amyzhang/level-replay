@@ -66,7 +66,56 @@ project(codegen)
 |tscl_window_size|Window size for TSCL Window|
 |verbose|Prints out additional information to stdout during training if passed|
 
+
 ### Examples
+##### Train on a Procgen environment, interpolating between value_l1 (primary) and uncertainty (secondary, 20% of the time)
+```
+python -m train \
+--xpid=test_strategy_interpolation \
+--env_name=bigfish \
+--distribution_mode=easy \
+--use_gae=True \
+--gamma=0.999 \
+--num_train_seeds=200 \
+--num_test_seeds=10 \
+--final_num_test_seeds=100 \
+--seed=5 \
+--train_full_distribution=False \
+--level_replay_seed_buffer_size=0 \
+--level_replay_seed_buffer_priority=score \
+--arch=small \
+--lr=0.0005 \
+--num_env_steps=25000000 \
+--num_steps=256 \
+--num_processes=64 \
+--ppo_epoch=3 \
+--num_mini_batch=8 \
+--algo=ppo \
+--level_replay_strategy=value_l1 \
+--level_replay_max_score_coef=0.0 \
+--level_replay_score_transform=rank \
+--level_replay_temperature=0.1 \
+--level_replay_schedule=proportionate \
+--level_replay_rho=1.0 \
+--level_replay_prob=0.95 \
+--level_replay_alpha=1.0 \
+--level_replay_secondary_strategy uncertainty \
+--level_replay_strategy_mix_coef 0.2 \
+--level_replay_secondary_score_transform eps_greedy \
+--level_replay_secondary_temperature 1.0 \
+--level_replay_secondary_eps 0.0 \
+--secondary_staleness_coef 0.0 \
+--staleness_transform=power \
+--staleness_temperature=1.0 \
+--staleness_coef=0.1 \
+--log_interval=1 \
+--weight_log_interval=10 \
+--log_grad_norm=False \
+--use_ucb=False \
+--use_mixreg=False \
+--verbose
+``` 
+
 ##### Train on a Procgen environment using PPO with uniform sampling
 ```
 python -m train \

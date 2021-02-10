@@ -255,7 +255,7 @@ parser.add_argument(
     "--level_replay_strategy_mix_coef", 
     type=float,
     default=0.5,
-    help="Weight to assign primary strategy when mixing with a secondary strategy")
+    help="Weight to assign seondary strategy when mixing with primary strategy")
 parser.add_argument(
     "--level_replay_secondary_score_transform",
     type=str, 

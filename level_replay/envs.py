@@ -148,7 +148,7 @@ class VecPyTorchProcgen(VecEnvWrapper):
         # reset environment here
         if self.level_sampler:
             for e in done.nonzero()[0]:
-                if self.secondary_level_sampler is None or np.random.rand() < self.strategy_mix_coef:
+                if self.secondary_level_sampler is None or np.random.rand() > self.strategy_mix_coef:
                     seed = self.level_sampler.sample()
                 else:
                     seed = self.secondary_level_sampler.sample()
